@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tic-Tac-Toe</title>
+    <link rel="stylesheet" href="tictactoe.css">
+</head>
+<body>
+
+<button id="newGame">New Game</button>
+<input type="text" id="gameId">
+<button id="joinGame">Join Game</button>
+
+
+<h3 id="gameIdDisplay"></h3>
+<h3 id="yourPiece"></h3>
+<h3 id="whoseTurn"></h3>
+<h3 id="winner"></h3>
+
+
+<div class="game-board" id="game-board">
+    <div class="box"></div>
+    <div class="box"></div>
+    <div class="box"></div>
+    <div class="box"></div>
+    <div class="box"></div>
+    <div class="box"></div>
+    <div class="box"></div>
+    <div class="box"></div>
+    <div class="box"></div>
+</div>
+
+<button id="reset-button">Reset</button>
+
+</body>
+
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+
+<script>
+    lockBoard();
+
+    // https://firebase.google.com/docs/web/setup#available-libraries
+    const firebaseConfig = {
+        apiKey: "AIzaSyAslvreWSVbyX-O_lJ7OQ3-EPQkgXWjXKA",
+        authDomain: "realtime-64d61.firebaseapp.com",
+        projectId: "realtime-64d61",
+        storageBucket: "realtime-64d61.appspot.com",
+        messagingSenderId: "963668069740",
+        appId: "1:963668069740:web:0b3d7a83bcc7a532f77749",
+        measurementId: "G-937F1QHQLE"
+    };
+
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    var gameId = "";
+    var gameTurn = "";
+    var myGame = null;
+    //get all the boxes
+    var boxes = document.querySelectorAll('.box');
+    //get the game board
+    var gameBoard = document.querySelector('.game-board');
+
+    //add a click event to each box
+    boxes.forEach(function(box) {
+        box.addEventListener('click', function() {
+            console.log('clicked');
+           console.log(myGame, gameTurn);
+            //if the box is empty, add an X or O to it
+            if (box.innerHTML == '' && myGame != null) {
+                console.log("game data is not null");
+                if(myGame && gameTurn == "X") {
+                    box.innerHTML = 'X';
+                    box.classList.add('x');
+                    console.log('X Played');
+                    lockBoard();
+                    updateBoard();
+                } else if (!myGame && gameTurn == "O") {
+                    box.innerHTML = 'O';
+                    box.classList.add('o');
+                    console.log('O Played');
+                    lockBoard();
+                    updateBoard();
+                }
+            }
+            //check if there is a winner
+            // checkWinner();
+        });
+    });
+
+
+    function newGame() {
+        // show();
+        myGame = true;
+        gameTurn = "X";
+        console.log("new game");
+        //if myGame set yourPiece to 'You are X'
+        if (myGame) {
+            document.getElementById('yourPiece').innerHTML = 'You are X';
+        } else {
+            document.getElementById('yourPiece').innerHTML = 'You are O';
+        }
+        //reset the game board
+        clearBoard();
+        //create a random 6 digit id
+        let id = Math.floor(Math.random() * 1000000);
+        gameId = id.toString();
+        //set gameIdDisplay to the id
+        document.getElementById("gameIdDisplay").innerHTML = id;
+
+        //get the inner html of all the boxes and put them in an array
+        const boxes = document.querySelectorAll(".box");
+        const boxArray = [];
+        boxes.forEach(box => {
+            boxArray.push(box.innerHTML);
+        });
+
+
+
+        //create a new document in the database with a unique id as the name
+        db.collection("games").doc(gameId).set({
+            board: boxArray,
+            turn: "X",
+            winner: "",
+            winnerLine: []
+        })
+            .then(function (docRef) {
+                console.log("Document written with ID: ");
+            })
+            .catch(function (error) {
+                console.error("Error adding document: ", error);
+            });
+    }
+
+    function joinGame(id) {
+
+        //if id is not empty and matches the id in the database, get the game data
+        if (id != '') {
+            console.log("game id is valid");
+            //get the game data from the database
+            db.collection("games").doc(id).get().then(function (doc) {
+                if (doc.exists) {
+
+                    myGame = false;
+                    console.log("joined game");
+                    if (myGame) {
+                        document.getElementById('yourPiece').innerHTML = 'You are X';
+                    } else {
+                        document.getElementById('yourPiece').innerHTML = 'You are O';
+                    }
+                    //reset the game board
+                    clearBoard();
+                    //set gameIdDisplay to the id
+                    document.getElementById("gameIdDisplay").innerHTML = id;
+
+                    //get the document with the id from the database
+                    db.collection("games").doc(id +"").get().then(function (doc) {
+                        if (doc.exists) {
+                            console.log("Document data:", doc.data());
+                            //set the game board to the data from the database
+                            setBoard(doc.data().board);
+                            //set the turn to the data from the database
+                            setTurn(doc.data().turn);
+                            //set the winner to the data from the database
+                            setWinner(doc.data().winner);
+                            //set the winnerLine to the data from the database
+                            setWinnerLine(doc.data().winnerLine);
+                        } else {
+                            // doc.data() will be undefined in this case
+                            console.log("No such document!");
+                        }
+                    }).catch(function (error) {
+                        console.log("Error getting document:", error);
+                    });
+
+                } else {
+                    // doc.data() will be undefined in this case
+                    console.log("No such document!");
+                }
+            }).catch(function (error) {
+                console.log("Error getting document:", error);
+            });
+        } else {
+            console.log("game id is not valid");
+        }
+
+
+
+
+
+
+    }
+ //fucntion if the database is updated, update the game board and turn
+
+    db.collection("games").onSnapshot(function (snapshot) {
+        snapshot.docChanges().forEach(function (change) {
+            if (change.type === "modified") {
+                console.log("Modified data: ", change.doc.data());
+
+                setBoard(change.doc.data().board);
+                setTurn(change.doc.data().turn);
+                setWinner(change.doc.data().winner);
+                setWinnerLine(change.doc.data().winnerLine);
+                gameId = change.doc.id;
+            }
+        });
+    });
+
+    //if the document is deleted, delete the game board and turn
+    db.collection("games").onSnapshot(function (snapshot) {
+        snapshot.docChanges().forEach(function (change) {
+            if (change.type === "removed") {
+                console.log("Removed data: ", change.doc.data());
+                alert("Game connection lost - someone left the game");
+                clearBoard();
+                gameTurn = "";
+                gameId = "";
+                //refresh the page
+                location.reload();
+            }
+        });
+    });
+
+    //update database board wth the current board
+    function updateBoard() {
+        console.log("update board");
+        //get the inner html of all the boxes and put them in an array
+        const boxes = document.querySelectorAll(".box");
+        const boxArray = [];
+        boxes.forEach(box => {
+            boxArray.push(box.innerHTML);
+        });
+
+        //let next turn be the opposite of the current turn
+        let nextTurn = "";
+        if (gameTurn == "X") {
+            nextTurn = "O";
+        } else {
+            nextTurn = "X";
+        }
+        //update the database with the current board
+        db.collection("games").doc(gameId).update({
+            board: boxArray,
+            turn: nextTurn
+        })
+            .then(function (docRef) {
+                console.log("Play Recorded");
+            })
+            .catch(function (error) {
+                console.error("Error playing turn ", error);
+            });
+    }
+
+
+    function setBoard(board) {
+        //get all the boxes
+        var boxes = document.querySelectorAll('.box');
+        //loop through the board array and set the inner html of each box to the value in the array
+        for (let i = 0; i < board.length; i++) {
+            boxes[i].innerHTML = board[i];
+            //if the value in the array is X, add the x class to the box
+            if (board[i] == 'X') {
+                boxes[i].classList.add('x');
+            }
+            //if the value in the array is O, add the o class to the box
+            if (board[i] == 'O') {
+                boxes[i].classList.add('o');
+            }
+        }
+    }
+
+    function setTurn(turn) {
+        console.log("It is now " + turn + "'s turn");
+        //set the whoseTurn to the turn
+        document.getElementById("whoseTurn").innerHTML = turn;
+        gameTurn = turn;
+        //if myGame is true and turn is X unlock the board
+        if (myGame && turn == "X") {
+            unlockBoard();
+        }
+        //if myGame is false and turn is O unlock the board
+        if (!myGame && turn == "O") {
+            unlockBoard();
+        }
+    }
+
+    function setWinner(winner) {
+        //set the winner to the winner
+        if(winner === "") {
+            console.log("no winner");
+        } else {
+            document.getElementById("winner").innerHTML = winner;
+        }
+    }
+
+    function setWinnerLine(winnerLine) {
+        //if winner line is empty, do nothing
+        if(winnerLine.length === 0) {
+            console.log("no winner line");
+        } else {
+            //loop through the winner line and add the class to the box
+            for (let i = 0; i < winnerLine.length; i++) {
+                document.getElementById(winnerLine[i]).classList.add('winner-line');
+            }
+        }
+    }
+
+
+
+    //check if there is a winner
+    function checkWinner() {
+        //get all the boxes
+        var boxes = document.querySelectorAll('.box');
+        //get the game board
+        var gameBoard = document.querySelector('.game-board');
+        //check if there is a winner horizontally or vertically or diagonally if so add the class winner to the boxes using a for loop
+
+        //check if there is a winner horizontally
+        for (var i = 0; i < boxes.length; i += 3) {
+            //check innerHTML is not empty
+            if (boxes[i].innerHTML !== '' && boxes[i].innerHTML === boxes[i + 1].innerHTML && boxes[i].innerHTML === boxes[i + 2].innerHTML) {
+                //add class winner to the boxes
+                boxes[i].classList.add('winner');
+                boxes[i + 1].classList.add('winner');
+                boxes[i + 2].classList.add('winner');
+                lockBoard();
+            }
+        }
+        //check if there is a winner vertically
+        for (var i = 0; i < boxes.length; i++) {
+            //check innerHTML is not empty
+            if (boxes[i].innerHTML !== '' && boxes[i].innerHTML === boxes[i + 3].innerHTML && boxes[i].innerHTML === boxes[i + 6].innerHTML) {
+                //add class winner to the boxes
+                boxes[i].classList.add('winner');
+                boxes[i + 3].classList.add('winner');
+                boxes[i + 6].classList.add('winner');
+                lockBoard();
+            }
+        }
+        //check if there is a winner diagonally
+        //make sure the boxes are not empty
+        if (boxes[0].innerHTML !== '' && boxes[0].innerHTML === boxes[4].innerHTML && boxes[0].innerHTML === boxes[8].innerHTML) {
+            //add class winner to the boxes
+            boxes[0].classList.add('winner');
+            boxes[4].classList.add('winner');
+            boxes[8].classList.add('winner');
+            lockBoard();
+        }
+        //make sure the boxes are not empty
+        if (boxes[2].innerHTML !== '' && boxes[2].innerHTML === boxes[4].innerHTML && boxes[2].innerHTML === boxes[6].innerHTML) {
+            //add class winner to the boxes
+            boxes[2].classList.add('winner');
+            boxes[4].classList.add('winner');
+            boxes[6].classList.add('winner');
+            lockBoard();
+        }
+
+    }
+
+    function lockBoard() {
+        //get all the boxes
+        var boxes = document.querySelectorAll('.box');
+        //loop through the boxes and add the class locked to the boxes
+        boxes.forEach(function(box) {
+        box.classList.add('locked');
+        });
+        document.getElementById("game-board").style.cursor = "not-allowed";
+    }
+
+    function unlockBoard() {
+        //get all the boxes
+        var boxes = document.querySelectorAll('.box');
+        //loop through the boxes and remove the class locked to the boxes
+        boxes.forEach(function(box) {
+        box.classList.remove('locked');
+        });
+        document.getElementById("game-board").style.cursor = "pointer";
+
+    }
+
+    //clear the board
+    function clearBoard() {
+        console.log("clear board");
+        //get all the boxes
+        var boxes = document.querySelectorAll('.box');
+        //loop through the boxes and remove the class winner to the boxes
+        boxes.forEach(function(box) {
+            box.classList.remove('winner');
+            box.innerHTML = '';
+        });
+        unlockBoard();
+    }
+
+    //show the game board
+    function show() {
+        gameBoard.style.display = 'block';
+    }
+
+    //delete the document from the database
+    function deleteGame() {
+        console.log("delete game");
+        db.collection("games").doc(gameId).delete()
+            .then(function () {
+                console.log("Document successfully deleted!");
+            }).catch(function (error) {
+                console.error("Error removing document: ", error);
+            });
+    }
+
+    //if new game is clicked, clear the board and show the game board
+    document.getElementById('newGame').addEventListener('click', function() {
+        clearBoard();
+        unlockBoard();
+        newGame();
+    } );
+
+    //if join game is clicked, clear the board and show the game board
+    document.getElementById('joinGame').addEventListener('click', function() {
+        clearBoard();
+        unlockBoard();
+        //get text from the input field
+        var gameId = document.getElementById('gameId').value;
+        joinGame(gameId);
+    } );
+
+    //if reset-button is clicked, clear the board
+    document.querySelector('#reset-button').addEventListener('click', function() {
+        clearBoard();
+        updateBoard();
+        //before pageUnload, clear the board and delete document from the database
+
+    });
+
+    window.onbeforeunload = function() {
+        clearBoard();
+        deleteGame();
+    }
+
+
+    //before page closed, clear the board and delete document from the database
+    // window.addEventListener('unload', (event) => {
+    //     console.log("unloaded");
+    //     clearBoard();
+    //     deleteGame();
+    // });
+    //
+    // window.addEventListener('beforeunload', (event) => {
+    //     return "Are you sure you want to leave?";
+    // });
+    //
+    // //confirm user wants to leave and if yes, clear the board and delete document from the database
+    // window.addEventListener('unload', (event) => {
+    //     console.log("unloaded");
+    //     clearBoard();
+    //     deleteGame();
+    // } );
+
+
+
+    //confirm user wants to leave the page
+    // window.onbeforeunload = function() {
+    //     return "Are you sure you want to leave?";
+    //     //confirm user wants to leave the page
+    //     var getConfirm = confirm("Are you sure you want to leave the page?");
+    //     if(getConfirm){
+    //         clearBoard();
+    //         deleteGame();
+    //     }else{
+    //         alert("You have cancelled!");
+    //     }
+    //     return getConfirm;
+    // }
+
+    // if (typeof window.addEventListener === 'undefined') {
+    //     window.addEventListener = function(e, callback) {
+    //         return window.attachEvent('on' + e, callback);
+    //     }
+    // }
+    //
+    // window.addEventListener('beforeunload', function() {
+    //     return 'Dialog Text Here';
+    // });
+
+
+
+</script>
+</html>
