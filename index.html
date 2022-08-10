@@ -58,7 +58,7 @@
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    var gameId = "";
+    var gameId = "DEFAULT";
     var gameTurn = "";
     var myGame = null;
     //get all the boxes
@@ -93,7 +93,6 @@
         });
     });
 
-
     function newGame() {
         // show();
         myGame = true;
@@ -110,6 +109,7 @@
         //create a random 6 digit id
         let id = Math.floor(Math.random() * 1000000);
         gameId = id.toString();
+        run();
         //set gameIdDisplay to the id
         document.getElementById("gameIdDisplay").innerHTML = id;
 
@@ -138,10 +138,11 @@
     }
 
     function joinGame(id) {
-
+        gameId = id;
         //if id is not empty and matches the id in the database, get the game data
-        if (id != '') {
+        if (gameId != '') {
             console.log("game id is valid");
+            run();
             //get the game data from the database
             db.collection("games").doc(id).get().then(function (doc) {
                 if (doc.exists) {
@@ -189,42 +190,93 @@
             console.log("game id is not valid");
         }
 
-
-
-
-
-
     }
- //fucntion if the database is updated, update the game board and turn
 
-    db.collection("games").onSnapshot(function (snapshot) {
-        snapshot.docChanges().forEach(function (change) {
-            if (change.type === "modified") {
-                console.log("Modified data: ", change.doc.data());
-
-                setBoard(change.doc.data().board);
-                setTurn(change.doc.data().turn);
-                setWinner(change.doc.data().winner);
-                setWinnerLine(change.doc.data().winnerLine);
-                gameId = change.doc.id;
+    function run() {
+        console.log("running");
+        //add a snapshot listener to the database for the doc with the id of gameId
+        db.collection("games").doc(gameId).onSnapshot(function (doc) {
+            //set the game board to the data from the database
+            setBoard(doc.data().board);
+            //checkwinner if there is a winner
+            checkWinner(doc.data().board);
+            //set the turn to the data from the database
+            setTurn(doc.data().turn);
+            //set the winner to the data from the database
+            setWinner(doc.data().winner);
+            //set the winnerLine to the data from the database
+            setWinnerLine(doc.data().winnerLine);
+            //if winner is not empty and board is empty set turn to winner
+            if (doc.data().winner != '' && doc.data().board == '') {
+                console.log("winner is not empty and board is empty so set turn to winner");
+                setTurn(doc.data().winner);
+                //unlock the board if myGame is true and turn is X
+                if (myGame && doc.data().turn == "X") {
+                    unlockBoard();
+                }
+                //unlock the board if myGame is false and turn is O
+                if (!myGame && doc.data().turn == "O") {
+                    unlockBoard();
+                }
             }
-        });
-    });
 
-    //if the document is deleted, delete the game board and turn
-    db.collection("games").onSnapshot(function (snapshot) {
-        snapshot.docChanges().forEach(function (change) {
-            if (change.type === "removed") {
-                console.log("Removed data: ", change.doc.data());
-                alert("Game connection lost - someone left the game");
-                clearBoard();
-                gameTurn = "";
-                gameId = "";
-                //refresh the page
-                location.reload();
-            }
         });
-    });
+    }
+
+    //check for win in board array
+    function checkWinner(boardArr){
+        //check for win in rows
+        for(let i = 0; i < 3; i++){
+            if(boardArr[i*3]!='' && boardArr[i*3+1]!='' && boardArr[i*3+2]!='' && boardArr[i*3] == boardArr[i*3+1] && boardArr[i*3+1] == boardArr[i*3+2]){
+                lockBoard();
+                setWinner(boardArr[i*3]);
+                saveWinner(boardArr[i*3]);
+                console.log("winner !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                return boardArr[i*3];
+            }
+        }
+        //check for win in columns
+        for(let i = 0; i < 3; i++){
+            if(boardArr[i]!='' && boardArr[i+3]!='' && boardArr[i+6]!='' && boardArr[i] == boardArr[i+3] && boardArr[i+3] == boardArr[i+6]){
+                lockBoard();
+                setWinner(boardArr[i]);
+                saveWinner(boardArr[i]);
+                console.log("winner !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                return boardArr[i];
+            }
+        }
+        //check for win in diagonals
+        if(boardArr[0]!='' && boardArr[4]!='' && boardArr[8]!='' &&boardArr[0] == boardArr[4] && boardArr[4] == boardArr[8]){
+            lockBoard();
+            setWinner(boardArr[4]);
+            saveWinner(boardArr[4]);
+            console.log("winner !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
+            return boardArr[4];
+        }
+        if(boardArr[2]!='' && boardArr[4]!='' && boardArr[6]!='' &&boardArr[2] == boardArr[4] && boardArr[4] == boardArr[6]){
+            lockBoard();
+            setWinner(boardArr[4]);
+            saveWinner(boardArr[4]);
+            console.log("winner !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
+            return boardArr[4];
+        }
+        return false;
+    }
+
+    //save winner to database
+    function saveWinner(winner){
+        db.collection("games").doc(gameId).update({
+            winner: winner
+        })
+            .then(function (docRef) {
+                console.log("Winner saved");
+            })
+            .catch(function (error) {
+                console.error("Error adding document: ", error);
+            });
+    }
 
     //update database board wth the current board
     function updateBoard() {
@@ -243,6 +295,7 @@
         } else {
             nextTurn = "X";
         }
+        console.log("past turn is " + gameTurn + "| next turn is " + nextTurn);
         //update the database with the current board
         db.collection("games").doc(gameId).update({
             board: boxArray,
@@ -256,7 +309,7 @@
             });
     }
 
-
+    //update database with the current board
     function setBoard(board) {
         //get all the boxes
         var boxes = document.querySelectorAll('.box');
@@ -277,7 +330,7 @@
     function setTurn(turn) {
         console.log("It is now " + turn + "'s turn");
         //set the whoseTurn to the turn
-        document.getElementById("whoseTurn").innerHTML = turn;
+        document.getElementById("whoseTurn").innerHTML = turn + "'s turn";
         gameTurn = turn;
         //if myGame is true and turn is X unlock the board
         if (myGame && turn == "X") {
@@ -294,7 +347,8 @@
         if(winner === "") {
             console.log("no winner");
         } else {
-            document.getElementById("winner").innerHTML = winner;
+            document.getElementById("winner").innerHTML = winner + " wins!";
+            lockBoard();
         }
     }
 
@@ -308,58 +362,6 @@
                 document.getElementById(winnerLine[i]).classList.add('winner-line');
             }
         }
-    }
-
-
-
-    //check if there is a winner
-    function checkWinner() {
-        //get all the boxes
-        var boxes = document.querySelectorAll('.box');
-        //get the game board
-        var gameBoard = document.querySelector('.game-board');
-        //check if there is a winner horizontally or vertically or diagonally if so add the class winner to the boxes using a for loop
-
-        //check if there is a winner horizontally
-        for (var i = 0; i < boxes.length; i += 3) {
-            //check innerHTML is not empty
-            if (boxes[i].innerHTML !== '' && boxes[i].innerHTML === boxes[i + 1].innerHTML && boxes[i].innerHTML === boxes[i + 2].innerHTML) {
-                //add class winner to the boxes
-                boxes[i].classList.add('winner');
-                boxes[i + 1].classList.add('winner');
-                boxes[i + 2].classList.add('winner');
-                lockBoard();
-            }
-        }
-        //check if there is a winner vertically
-        for (var i = 0; i < boxes.length; i++) {
-            //check innerHTML is not empty
-            if (boxes[i].innerHTML !== '' && boxes[i].innerHTML === boxes[i + 3].innerHTML && boxes[i].innerHTML === boxes[i + 6].innerHTML) {
-                //add class winner to the boxes
-                boxes[i].classList.add('winner');
-                boxes[i + 3].classList.add('winner');
-                boxes[i + 6].classList.add('winner');
-                lockBoard();
-            }
-        }
-        //check if there is a winner diagonally
-        //make sure the boxes are not empty
-        if (boxes[0].innerHTML !== '' && boxes[0].innerHTML === boxes[4].innerHTML && boxes[0].innerHTML === boxes[8].innerHTML) {
-            //add class winner to the boxes
-            boxes[0].classList.add('winner');
-            boxes[4].classList.add('winner');
-            boxes[8].classList.add('winner');
-            lockBoard();
-        }
-        //make sure the boxes are not empty
-        if (boxes[2].innerHTML !== '' && boxes[2].innerHTML === boxes[4].innerHTML && boxes[2].innerHTML === boxes[6].innerHTML) {
-            //add class winner to the boxes
-            boxes[2].classList.add('winner');
-            boxes[4].classList.add('winner');
-            boxes[6].classList.add('winner');
-            lockBoard();
-        }
-
     }
 
     function lockBoard() {
@@ -393,6 +395,8 @@
             box.classList.remove('winner');
             box.innerHTML = '';
         });
+        //set the winner to empty
+        document.getElementById("winner").innerHTML = "";
         unlockBoard();
     }
 
@@ -432,7 +436,20 @@
     document.querySelector('#reset-button').addEventListener('click', function() {
         clearBoard();
         updateBoard();
+        unlockBoard();
         //before pageUnload, clear the board and delete document from the database
+        //set turn to winner from database
+        db.collection("games").doc(gameId).get().then(function (doc) {
+            if (doc.exists) {
+                setTurn(doc.data().winner);
+            } else {
+                // doc.data() will be undefined in this case
+                console.log("No such document!");
+            }
+        }).catch(function (error) {
+            console.log("Error getting document:", error);
+        });
+
 
     });
 
